@@ -1,5 +1,5 @@
 streamlit
-whisper
+whisper=20240930
 torch
 torchvision
 torchaudio
