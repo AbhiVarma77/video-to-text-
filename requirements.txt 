@@ -1,0 +1,8 @@
+streamlit
+git+https://github.com/openai/whisper.git
+torch
+torchvision
+torchaudio
+moviepy
+fpdf
+googletrans==4.0.0-rc1
