@@ -1,5 +1,5 @@
 streamlit
-whispe
+whisper
 torch
 torchvision
 torchaudio
