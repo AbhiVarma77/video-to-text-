@@ -1,6 +1,3 @@
-Here’s a detailed README file you can use for your project on GitHub:  
-
----
 
 # **Subtitle Generation, Translation, and PDF Creation App**  
 
