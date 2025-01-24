@@ -4,6 +4,7 @@ from moviepy.editor import VideoFileClip
 from fpdf import FPDF
 import tempfile
 from googletrans import Translator
+import os
 
 # Whisper model for transcription
 model = whisper.load_model("base")
@@ -15,7 +16,7 @@ def extract_audio_from_video(video_path):
     video.audio.write_audiofile(audio_path, codec='pcm_s16le')  # Save as PCM WAV
     return audio_path
 
-# Function to transcribe video and return time-aligned subtitles
+# Function to transcribe video/audio and return time-aligned subtitles
 def transcribe_with_timestamps(file_path):
     result = model.transcribe(file_path)
     segments = result['segments']
@@ -62,15 +63,16 @@ def translate_text(text, target_language):
 
 # Streamlit interface
 st.sidebar.title("Navigation")
-page = st.sidebar.radio("Select a page:", ["Home", "Drag and Drop"])
+page = st.sidebar.radio("Select a page:", ["Home", "Upload Files"])
 
 # Home Page Content
 if page == "Home":
     st.title("Subtitle Generation App Overview")
     st.markdown("""
-    Here’s an overview of the key concepts used in the above code:
-    
-    ### 1. **Streamlit**:
+    **This app now supports both MP4 video and MP3 audio files for transcription and translation.**
+       
+     ### 1. **Streamlit**:
+                
     Streamlit is an open-source Python framework for creating data apps quickly and easily. It simplifies the process of developing interactive web apps for machine learning, data science, and other applications.
     - **`st.sidebar`**: Creates a sidebar for navigation, where you can place buttons or input elements.
     - **`st.file_uploader`**: Allows users to upload files directly in the app, here restricted to MP4 video files.
@@ -123,37 +125,41 @@ if page == "Home":
     These concepts together form a powerful combination for creating an interactive web application capable of video processing, transcription, translation, and document generation, all within the Streamlit environment.
     """)
 
-# Drag and Drop Page
-if page == "Drag and Drop":
-    st.title("Upload Your Video")
-    
-    # Drag and Drop File Uploader
-    uploaded_file = st.file_uploader("Drag and Drop or Click to Upload MP4 Video", type="mp4")
+# Upload Files Page
+if page == "Upload Files":
+    st.title("Upload Your Video or Audio")
 
-    # If a video is uploaded, start processing
+    # Drag and Drop File Uploader
+    uploaded_file = st.file_uploader("Upload MP4 Video or MP3 Audio", type=["mp4", "mp3"])
+
+    # If a file is uploaded, start processing
     if uploaded_file:
         # Save uploaded file to a temporary location
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_video_file:
-            temp_video_file.write(uploaded_file.read())
-            video_file_path = temp_video_file.name
+        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(uploaded_file.name)[-1]) as temp_file:
+            temp_file.write(uploaded_file.read())
+            file_path = temp_file.name
 
-        # Display the uploaded video in the Streamlit UI
-        st.video(video_file_path)
-
-        # Extract audio from video
-        st.write("Extracting audio...")
-        temp_audio_file_path = extract_audio_from_video(video_file_path)
+        # Check if the file is MP4 or MP3
+        if uploaded_file.name.endswith(".mp4"):
+            st.video(file_path)
+            st.write("Extracting audio from video...")
+            processed_file_path = extract_audio_from_video(file_path)
+        elif uploaded_file.name.endswith(".mp3"):
+            st.audio(file_path)
+            st.write("Processing MP3 audio...")
+            processed_file_path = file_path
 
         # Language Translation Section
         st.subheader("Select Language for Subtitles")
-        target_language = st.selectbox("Choose Language", ["hi", "bn", "ta", "te", "ml", "kn", "pa", "mr","en"])
+        target_language = st.selectbox("Choose Language", ["hi", "bn", "ta", "te", "ml", "kn", "pa", "mr", "en"])
+        
         # Generate subtitles when button is clicked
         if st.button("Generate Subtitles"):
             if target_language:
                 st.write("Generating subtitles in", target_language, "...")
 
                 # Get time-aligned transcription using Whisper
-                subtitles = transcribe_with_timestamps(temp_audio_file_path)
+                subtitles = transcribe_with_timestamps(processed_file_path)
 
                 # Translate subtitles
                 translated_subtitles = []
@@ -175,30 +181,25 @@ if page == "Drag and Drop":
                 st.write("Full Translated Subtitles (Paragraph):")
                 st.write(full_subtitle_text)
 
-                # Streamlit interface code for downloading PDF files
+                # Save PDFs
+                if st.button("Download Subtitles with Timeline as PDF"):
+                    pdf_path_with_timestamps = save_subtitles_to_pdf(subtitles, "Translated_Subtitles_with_Timestamps")
+                    with open(pdf_path_with_timestamps, "rb") as pdf_file:
+                        st.download_button(
+                            label="Download Translated Subtitles with Timestamps",
+                            data=pdf_file,
+                            file_name="Translated_Subtitles_with_Timestamps.pdf",
+                            mime="application/pdf"
+                        )
 
-# After the user clicks on the "Generate Subtitles" button and the translation process is completed,
-# allow them to download the generated PDFs with subtitles.
-
-# Save translated subtitles with timestamps to PDF
-if st.button("Download Subtitles with Timeline as PDF"):
-    pdf_path_with_timestamps = save_subtitles_to_pdf(subtitles, "Translated_Subtitles_with_Timestamps")
-    with open(pdf_path_with_timestamps, "rb") as pdf_file:
-        st.download_button(
-            label="Download Translated Subtitles with Timestamps",
-            data=pdf_file,
-            file_name="Translated_Subtitles_with_Timestamps.pdf",
-            mime="application/pdf"
-        )
-
-# Save full translated subtitles to PDF
-if st.button("Download Full Translated Subtitles as PDF"):
-    pdf_path_full = save_full_subtitles_to_pdf(full_subtitle_text, "Translated_Full_Subtitles")
-    with open(pdf_path_full, "rb") as pdf_file:
-        st.download_button(
-            label="Download Full Translated Subtitles",
-            data=pdf_file,
-            file_name="Translated_Full_Subtitles.pdf",
-            mime="application/pdf")
-else:
+                if st.button("Download Full Translated Subtitles as PDF"):
+                    pdf_path_full = save_full_subtitles_to_pdf(full_subtitle_text, "Translated_Full_Subtitles")
+                    with open(pdf_path_full, "rb") as pdf_file:
+                        st.download_button(
+                            label="Download Full Translated Subtitles",
+                            data=pdf_file,
+                            file_name="Translated_Full_Subtitles.pdf",
+                            mime="application/pdf"
+                        )
+            else:
                 st.warning("Please select a language to generate subtitles.")
